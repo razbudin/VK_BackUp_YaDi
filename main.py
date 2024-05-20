@@ -1,11 +1,14 @@
+
+# import yadi
 import os
 import sys
 import requests
 import json
-# from pprint import pprint
+from datetime import datetime, date
+from pprint import pprint
 import access
 vk_token = access.vk_key()
-ya_token = access.ya_key()
+ya_token = f'OAuth {access.ya_key()}'
 ''' Для запуска программы создать файл access.py
 c функциями vk_key возвращающая ВК-токен
 и функцию ya_key  возвращающей Я-токен
@@ -24,12 +27,13 @@ while flag:
     id = input()
     print('Дополнительно можно ввести, через пробел, в одну строку')
     print('Первый указаный в примере параметр == параметр по умолчанию')
-    print(f'count=(5, колличество копируемых фото) '
+    print(f'count=(5, колличество копируемых фото)\n'
           f'album_id=(profile или wall '
-          f'другие параметры album_id пока не поддерживаются) '
+          f'другие параметры album_id пока не поддерживаются)\n'
           f'rev=(1 или 0, 0-хронологический, 1-обратный)')
     print('Вводить только значения число, либо строка. '
           'Или просто нажмите Enter')
+    print('Пример:\n10 wall 0')
     id_and_param = list(input().split())
     # id = id_and_param.pop(0)
     if len(id_and_param) < 1 or len(id_and_param) > 3:
@@ -56,10 +60,6 @@ while flag:
                 flag = True
 
 
-# print('Введите Яндекс Полигон OAuth-токен')
-# ya_token = input()
-# print(access_token)
-# print(input_param)
 class Reboot:
     '''Перезагрузка скрипта'''
 
@@ -129,10 +129,9 @@ class VK:
 
     def photos_get(self, count, album_id, rev):
         ''' Получаем .json для дальнейшей работы с фотографиями '''
-        # print(self._id, 'user_id photos_get')
         params = {'owner_id': self._id,
                   'album_id': album_id,
-                  'rev': 1,
+                  'rev': rev,
                   'extended': 1,
                   'photo_sizes': 1,
                   'count': count}
@@ -150,6 +149,7 @@ class VK:
                                       self.album_id,
                                       self.rev), outf)
         print('photos.json файл получен')
+        print('Продолжаем...')
 
     id = property(get_id, set_id)
 
@@ -171,10 +171,9 @@ class WorkJson:
             re.reboot()
         return json_data
 
-    # @staticmethod
     def create_path(self):
         json_data = self.open_json()
-        data = []
+        data_path = []
         if int(input_param['count']) > int(json_data['response']['count']):
             count = json_data['response']['count']
         else:
@@ -183,14 +182,16 @@ class WorkJson:
             size = json_data['response']['items'][i]['sizes'][-1]['type']
             likes = json_data['response']['items'][i]['likes']['count']
             url = json_data['response']['items'][i]['sizes'][-1]['url']
-            date = json_data['response']['items'][i]['date']
-            data.append({'size': size,
-                         'likes': likes,
-                         'url': url,
-                         'date': date})
+            ts = int(json_data['response']['items'][i]['date'])
+            data = datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d')
+            data_path.append({'size': size,
+                              'likes': likes,
+                              'url': url,
+                              'data': data})
         with open('path.json', 'wt', encoding='utf-8') as f:
-            json.dump(data, f)
+            json.dump(data_path, f)
         print('path.json сформирован')
+        print('Продолжаем...')
 
 
 wj = WorkJson()
@@ -200,12 +201,124 @@ wj.create_path()
 class YaDi:
     ''' Класс для работы с Яндекс Диском '''
 
-    def __init__(self, ya_token):
+    def __init__(self, ya_token, path='VK_BackUp'):
         self.token = ya_token
+        self.path = path
+        self.url = 'https://cloud-api.yandex.net/v1/disk/resources'
+        self.params = {'Authorization': self.token,
+                       'Content-Type': 'application/json',
+                       'Accept': 'application/json'}
 
-    def create_folder(self, name='VK_BackUp'):
-        pass
+    def create_folder(self, path):
+        ''' Создает директорию в зависимости от того что придет в path
+        вызывается из folder_status() '''
+        if path == self.path:
+            params = {'path': self.path}
+            response = requests.put(
+                self.url, headers=self.params, params=params)
+            status = response.status_code
+            if status == 201 or status == 409:
+                print(f'Директория {self.path} создана')
+                print('Продолжаем...')
+            return status
+        else:
+            params = {'path': f'{self.path}/{date.today()}'}
+            response = requests.put(
+                self.url, headers=self.params, params=params)
+            print(f'Директория {date.today()} создана')
+            print('Продолжаем...')
+            status = response.status_code
+            return status
 
-# pprint(vk.photos_get())
-# # print(vk.user_get_id())
-# os.remove('photos.json')
+
+    def folder_status(self):
+        ''' Проверяет создана ли директория
+        вызывается из функции upload '''
+        params = {'path': self.path}
+        response = requests.get(
+            self.url, headers=self.params, params=params)
+        if 200 == response.status_code:
+            print(f'Директория {self.path} существует')
+            print('Продолжаем ...')
+            status = response.status_code
+        else:
+            path = self.path
+            status = self.create_folder(path)
+        params = {'path': f'{self.path}/{date.today()}'}
+        response = requests.get(
+            self.url, headers=self.params, params=params)
+        if response.status_code == 200:
+            print(f'Директория {self.path}/{date.today()} существует')
+            print('Продолжаем ...')
+            status = response.status_code
+        else:
+            path = f'{self.path}/{date.today()}'
+            status = self.create_folder(path)
+        return status
+
+
+            
+ 
+
+    def file_status(self, likes=135):
+        ''' Проверяет существует ли файл с именем
+        переданым из функции upload '''
+        params = {'path': f'{self.path}/{date.today()}/{likes}.jpg'}
+        response = requests.get(
+            self.url, headers=self.params, params=params)
+        return response.status_code
+
+
+
+    def upload(self):
+        ''' Проверяет доступнось директорий и копирует фото на Я.Диск '''
+        with open('path.json', 'rt') as f:
+            path_json = json.load(f)
+        status = self.folder_status()
+        # status += self.folder_status()
+        # print(f'278 {status}')
+        # Загрузка фото на диск
+        fileinfo = []
+        if 200 <= status < 300:
+            url = f'{self.url}/upload'
+            for i in range(len(path_json)):
+                size = path_json[i]['size']
+                likes = path_json[i]['likes']
+                url_ph = path_json[i]['url']
+                data = path_json[i]['data']
+                if self.file_status(likes) == 200:
+                    params = {
+                        'path': f'{self.path}/{date.today()}'
+                                f'/{likes}{data}.jpg',
+                        'url': url_ph}
+                    response = requests.post(
+                        url, headers=self.params, params=params)
+                    resp_code = response.status_code
+                    if int(resp_code) == 202:
+                        print(f'фото {i+1} {likes}_{data}.jpg загружено')
+                        name = f'{likes}_{data}.jpg'
+                        fileinfo.append({'file_name': name,
+                                         'size': size})
+                else:
+                    params = {
+                        'path': f'{self.path}/{date.today()}'
+                                f'/{likes}.jpg',
+                        'url': url_ph}
+                    response = requests.post(
+                        url, headers=self.params, params=params)
+                    resp_code = response.status_code
+                    if int(resp_code) == 202:
+                        print(f'фото {i+1} {likes}.jpg загружено')
+                        name = f'{likes}_{data}.jpg'
+                        fileinfo.append({'file_name': name,
+                                         'size': size})
+                        
+            with open('file_info.json', 'w', encoding='utf-8') as f:
+                json.dump(fileinfo, f)
+
+
+
+ya = YaDi(ya_token)
+ya.upload()
+os.remove('photos.json')
+os.remove('path.json')
