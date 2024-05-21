@@ -169,6 +169,11 @@ class WorkJson:
             print('Файл.json не содержит данных для обработки фото')
             print('Программа будет прекращена')
             re.reboot()
+        elif int(json_data['response']['count']) == 0:
+            print(f'Скачаный файл содержит '
+                  f"{json_data['response']['count']} файлов")
+            print('Программа будет прекращена')
+            re.reboot()
         return json_data
 
     def create_path(self):
@@ -230,7 +235,6 @@ class YaDi:
             status = response.status_code
             return status
 
-
     def folder_status(self):
         ''' Проверяет создана ли директория
         вызывается из функции upload '''
@@ -256,10 +260,6 @@ class YaDi:
             status = self.create_folder(path)
         return status
 
-
-            
- 
-
     def file_status(self, likes=135):
         ''' Проверяет существует ли файл с именем
         переданым из функции upload '''
@@ -268,16 +268,11 @@ class YaDi:
             self.url, headers=self.params, params=params)
         return response.status_code
 
-
-
     def upload(self):
         ''' Проверяет доступнось директорий и копирует фото на Я.Диск '''
         with open('path.json', 'rt') as f:
             path_json = json.load(f)
         status = self.folder_status()
-        # status += self.folder_status()
-        # print(f'278 {status}')
-        # Загрузка фото на диск
         fileinfo = []
         if 200 <= status < 300:
             url = f'{self.url}/upload'
@@ -312,13 +307,17 @@ class YaDi:
                         name = f'{likes}_{data}.jpg'
                         fileinfo.append({'file_name': name,
                                          'size': size})
-                        
+
             with open('file_info.json', 'w', encoding='utf-8') as f:
                 json.dump(fileinfo, f)
-
 
 
 ya = YaDi(ya_token)
 ya.upload()
 os.remove('photos.json')
 os.remove('path.json')
+with open('file_info.json') as f:
+    text = json.load(f)
+
+print('\nБыли загружены файлы')
+pprint(text)
